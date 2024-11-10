@@ -1,6 +1,9 @@
 from discord import Message
-from handler.llm_handler import LLMHandler
-from handler.func_handler import FuncHandler
+from milo.handler.llm_handler import LLMHandler
+from milo.handler.func_handler import FuncHandler
+from milo.loggers import get_loggers
+
+app_logger = get_loggers()
 
 
 class MsgHandler:
@@ -25,11 +28,11 @@ class MsgHandler:
 
             await self.send_response(message, response)
         else:
-            print("An unexpected error occured.")
+            app_logger.error("An unexpected error occured")
 
     async def send_response(self, message: Message, response: str) -> None:
 
         try:
             await message.channel.send(response)
         except Exception as e:
-            print(e)
+            app_logger.error(e)

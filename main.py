@@ -1,7 +1,10 @@
 from discord import Message
-from database import create_tables
-from handler.discord_handler import DiscordHandler
-from handler.msg_handler import MsgHandler
+from milo.database import create_tables
+from milo.handler.discord_handler import DiscordHandler
+from milo.handler.msg_handler import MsgHandler
+from milo.loggers import get_loggers
+
+app_logger = get_loggers()
 
 
 def main() -> None:
@@ -12,7 +15,7 @@ def main() -> None:
 
     @dc_handler.client.event
     async def on_ready() -> None:
-        print(f"{dc_handler.client.user} is now running!")
+        app_logger.info(f"{dc_handler.client.user} is now running!")
 
     @dc_handler.client.event
     async def on_message(message: Message) -> None:
@@ -28,7 +31,7 @@ def main() -> None:
             user_message = user_message[dc_handler.name_len :]
             user_message = user_message.lstrip()
 
-            print(f'[{channel}] {username}: "{user_message}"')
+            app_logger.info(f"[{channel}] {username}: '{user_message}'")
             msg_handler = MsgHandler()
             await msg_handler.process_message(message, user_message)
 

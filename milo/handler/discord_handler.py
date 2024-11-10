@@ -2,6 +2,9 @@ from typing import Final
 import os
 from dotenv import load_dotenv
 from discord import Intents, Client, Message, Guild, User, VoiceChannel
+from milo.loggers import get_loggers
+
+app_logger = get_loggers()
 
 
 class DiscordHandler:

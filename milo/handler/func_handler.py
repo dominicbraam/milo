@@ -1,3 +1,8 @@
+from milo.loggers import get_loggers
+
+app_logger = get_loggers()
+
+
 class FuncHandler:
 
     def __init__(self, identifier: str, args: dict):

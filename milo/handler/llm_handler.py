@@ -1,6 +1,9 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from milo.loggers import get_loggers
+
+app_logger = get_loggers()
 
 
 class LLMHandler:

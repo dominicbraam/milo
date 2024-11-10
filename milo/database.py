@@ -7,8 +7,11 @@ from peewee import (
     DateTimeField,
     IntegerField,
 )
+from milo.loggers import get_loggers
 
-sqlitedb = SqliteDatabase("../data/db.sqlite3", pragmas={"foreign_keys": 1})
+app_logger = get_loggers()
+
+sqlitedb = SqliteDatabase("data/db.sqlite3", pragmas={"foreign_keys": 1})
 
 
 class BaseModel(Model):
