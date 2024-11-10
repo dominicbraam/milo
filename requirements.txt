@@ -1,0 +1,4 @@
+discord.py==2.4
+python-dotenv==1.0.1
+peewee==3.17.7
+openai==1.54.3
