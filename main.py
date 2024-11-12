@@ -1,21 +1,24 @@
 from discord import Message, Guild
-from milo.database import sqlitedb, tables
-from milo.handler.discord_handler import DiscordHandler
-from milo.handler.msg_handler import MsgHandler
+from milo.handler.database import sqlitedb, tables
+from milo.handler.discord import DiscordHandler
+from milo.handler.msg import MsgHandler
 from milo.mods.settings import (
-    server0,
     insert_default_server_settings,
 )
-from milo.loggers import get_loggers
+from milo.globals import bot_name, bot_name_len, bot_server_id
+from milo.handler.log import Logger
 
-app_logger = get_loggers()
+app_logger = Logger("milo").get_logger()
+Logger("discord").get_logger()
+Logger("openai").get_logger()
+Logger("peewee").get_logger()
 
 
 def main() -> None:
 
     sqlitedb.connect()
     sqlitedb.create_tables(tables)
-    insert_default_server_settings(server0)
+    insert_default_server_settings(bot_server_id)
 
     dc_handler = DiscordHandler()
 
@@ -37,8 +40,8 @@ def main() -> None:
             return
 
         user_message = user_message.lower()
-        if user_message.startswith(dc_handler.name):
-            user_message = user_message[dc_handler.name_len :]
+        if user_message.startswith(bot_name):
+            user_message = user_message[bot_name_len:]
             user_message = user_message.lstrip()
 
             app_logger.info(f"[{channel}] {username}: '{user_message}'")

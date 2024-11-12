@@ -5,7 +5,7 @@ class Logger:
 
     def __init__(self, logger_name: str):
         self.logger = logging.getLogger(logger_name)
-        self.logger.setLevel(logging.INFO)
+        self.logger.setLevel(logging.DEBUG)
 
         dt_fmt = "%Y-%m-%d %H:%M:%S"
         logFormatter = logging.Formatter(

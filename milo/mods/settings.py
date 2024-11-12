@@ -1,100 +1,33 @@
 from discord import Message
 from pydantic import BaseModel
+from pydantic_core import from_json
 import toml
-from milo.database import Settings as SettingsTbl
-from milo.handler.response_handler import (
+from milo.handler.database import Settings as SettingsTbl
+from milo.handler.response import (
     admin_privileges,
     confirm_decision,
     respond_table_from_dict,
 )
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
-
-server0 = 0
+from milo.globals import bot_server_id
 
 
 class ServerSettings(BaseModel):
     reminder_time: int
 
 
-class Settings:
+def load_settings_from_defaults_file(settings_group: str) -> ServerSettings:
+    """get default settings from defaults file and return struct"""
 
-    def __init__(self, message: Message, args: dict):
-        self.message = message
-        self.args = args
-        self.server_id = self.message.guild.id
+    match settings_group:
+        case "server":
+            settings_class = ServerSettings
+        case _:
+            raise ValueError(f"{settings_group} is not a valid setting group.")
 
-        default_settings_row = self.get_server_settings_row(server0)
-        self.default_settings = self.make_settings_struct_from_row(
-            default_settings_row
-        )
-        self.settings_fields = ServerSettings.model_fields
+    with open("settings.default.toml", "r") as f:
+        settings = toml.load(f)
 
-        self.ensure_settings_exist_for_server()
-        self.server_current_settings_row = self.get_server_settings_row(
-            self.server_id
-        )
-        self.current_settings_struct = self.make_settings_struct_from_row(
-            self.server_current_settings_row
-        )
-        self.settings_options = {
-            "reminder_time": {
-                "current": self.current_settings_struct.reminder_time,
-                "units": "mins",
-            },
-        }
-
-    @respond_table_from_dict
-    async def get_server_settings_as_dict(self) -> dict:
-        """get bot settings for server"""
-
-        return self.current_settings_struct.dict()
-
-    @admin_privileges
-    @confirm_decision(additional_process=None)
-    async def reset_server_settings(self) -> str:
-        """reset settings to default values for server"""
-
-        settings_default_json = self.default_settings.model_dump_json()
-        self.server_current_settings_row.settings = settings_default_json
-        self.server_current_settings_row.save()
-
-        return "Default settings applied."
-
-    @admin_privileges
-    @confirm_decision(additional_process="form")
-    async def edit_server_settings(self, updated_settings: dict) -> str:
-        """edit settings"""
-
-        new_settings = ServerSettings.parse_obj(updated_settings)
-        self.server_current_settings_row.settings = (
-            new_settings.model_dump_json()
-        )
-        self.server_current_settings_row.save()
-
-        return "Settings updated."
-
-    def get_server_settings_row(self, server_id: int):
-        """get server settings row from db"""
-        return SettingsTbl.get(SettingsTbl.server_id == server_id)
-
-    def make_settings_struct_from_row(self, settings_db_row) -> ServerSettings:
-        """get server settings for server"""
-        return ServerSettings.model_validate_json(settings_db_row.settings)
-
-    def ensure_settings_exist_for_server(self):
-        """insert default settings for server if it does not exist"""
-
-        server_settings = SettingsTbl.get_or_none(
-            SettingsTbl.server_id == self.server_id
-        )
-
-        if server_settings is None:
-            settings_default_json = self.default_settings.model_dump_json()
-            SettingsTbl.create(
-                server_id=self.server_id, settings=settings_default_json
-            )
+    return settings_class.parse_obj(settings[settings_group])
 
 
 def insert_default_server_settings(server_id) -> None:
@@ -112,9 +45,80 @@ def insert_default_server_settings(server_id) -> None:
         settings0.save()
 
 
-def load_settings_from_defaults_file(settings_group: str) -> ServerSettings:
-    """get default settings from defaults file and return struct"""
-    with open("settings.default.toml", "r") as f:
-        settings = toml.load(f)
+class Settings:
 
-    return ServerSettings.parse_obj(settings[settings_group])
+    def __init__(self, message: Message, args: dict):
+        self.message: Message = message
+        self.args: dict = args
+        self.settings_fields: list = ServerSettings.model_fields
+        self.__ensure_settings_exist_for_server()
+
+    @property
+    def settings_options(self):
+        settings_obj = self.__get_settings(self.message.guild.id)
+        settings_model = self.__settings_json_to_model(
+            ServerSettings, settings_obj.settings
+        )
+
+        return {
+            "reminder_time": {
+                "current": settings_model.reminder_time,
+                "units": "mins",
+            },
+        }
+
+    @respond_table_from_dict
+    async def get_server_settings_as_dict(self) -> dict:
+        """get bot settings for server"""
+
+        settings_obj = self.__get_settings(self.message.guild.id)
+        settings_model = self.__settings_json_to_model(
+            ServerSettings, settings_obj.settings
+        )
+
+        return settings_model.dict()
+
+    @admin_privileges
+    @confirm_decision(additional_process=None)
+    async def reset_server_settings(self) -> str:
+        """reset settings to default values for server"""
+
+        settings_obj = self.__get_settings(self.message.guild.id)
+        default_settings_obj = self.__get_settings(bot_server_id)
+
+        settings_obj.settings = default_settings_obj.settings
+        settings_obj.save()
+
+        return "Default settings applied."
+
+    @admin_privileges
+    @confirm_decision(additional_process="form")
+    async def edit_server_settings(self, updated_settings: dict) -> str:
+        """edit settings"""
+
+        settings_obj = self.__get_settings(self.message.guild.id)
+
+        new_settings = ServerSettings.parse_obj(updated_settings)
+        settings_obj.settings = new_settings.model_dump_json()
+        settings_obj.save()
+
+        return "Settings updated."
+
+    def __get_settings(self, server_id: int):
+        """get current server settings"""
+        return SettingsTbl.get(SettingsTbl.server_id == server_id)
+
+    def __settings_json_to_model(
+        self, settings_obj: BaseModel, settings_json: str
+    ):
+        return settings_obj.model_validate(from_json(settings_json))
+
+    def __ensure_settings_exist_for_server(self):
+        """insert default settings for server if it does not exist"""
+
+        default_settings_obj = self.__get_settings(bot_server_id)
+
+        SettingsTbl.get_or_create(
+            server_id=self.message.guild.id,
+            defaults={"settings": default_settings_obj.settings},
+        )

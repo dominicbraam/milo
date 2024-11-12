@@ -1,14 +1,12 @@
 from discord import Message
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
+from milo.globals import parent_mod
 
 
 class FuncHandler:
 
     def __init__(self, message: Message, identifier: str, args: dict):
         self.message = message
-        self.modules_loc = "milo.mods"
+        self.modules_loc = parent_mod
         self.identifier: str = identifier
         self.args: dict = args
 
@@ -27,6 +25,3 @@ class FuncHandler:
         response = getattr(class_obj, self.name)()
 
         return response
-
-    def get_module(self) -> str:
-        return self.module

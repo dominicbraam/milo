@@ -1,18 +1,13 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
 
 
 class LLMHandler:
 
     def __init__(self):
         load_dotenv()
-        self.api_key = os.getenv("OPENAI_API_KEY")
-
-        self.client = OpenAI(api_key=self.api_key)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def chat_completions_custom(self, user_message: str):
         messages = [
@@ -31,11 +26,12 @@ class LLMHandler:
         return self.client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            tools=self.get_function_descriptions(),
+            tools=self.function_descriptions,
             tool_choice="required",
         )
 
-    def get_function_descriptions(self) -> list[dict]:
+    @property
+    def function_descriptions(self) -> list[dict]:
         return [
             {
                 "type": "function",

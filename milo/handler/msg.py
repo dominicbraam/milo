@@ -1,9 +1,6 @@
 from discord import Message
-from milo.handler.llm_handler import LLMHandler
-from milo.handler.func_handler import FuncHandler
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
+from milo.handler.llm import LLMHandler
+from milo.handler.funcs import FuncHandler
 
 
 class MsgHandler:
@@ -11,7 +8,6 @@ class MsgHandler:
     def __init__(self, message: Message, user_message: str):
         self.message = message
         self.user_message = user_message
-        self.response = ""
 
     async def process_message(self) -> str:
 
@@ -38,5 +34,10 @@ class MsgHandler:
             await func_handler.call_function()
 
         else:
-            await self.message.channel.send("Something went wrong.")
-            app_logger.error("An unexpected error occured")
+            await self.message.channel.send(
+                "Something went wrong."
+            )  # TODO: add llm responder
+            app_logger.error(
+                f"""finish_reason: {finish_reason} and call_type: {call_type}
+                not supported"""
+            )

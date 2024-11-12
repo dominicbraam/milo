@@ -1,8 +1,5 @@
 from discord import Message
-from milo.handler.response_handler import respond_basic_str
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
+from milo.handler.response import respond_basic_str
 
 
 @respond_basic_str

@@ -7,9 +7,6 @@ from peewee import (
     SqliteDatabase,
     TextField,
 )
-from milo.loggers import get_loggers
-
-app_logger = get_loggers()
 
 sqlitedb = SqliteDatabase("data/db.sqlite3", pragmas={"foreign_keys": 1})
 
