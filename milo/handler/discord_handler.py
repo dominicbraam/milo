@@ -30,9 +30,19 @@ class Context:
     def __init__(self, message: Message):
         self.user: User = message.author
         self.server: Guild = message.guild
-        self.server_vcs: [VoiceChannel] = self.server
+        self.server_vcs: [VoiceChannel] = self.server.voice_channels
 
         for vc in self.server_vcs:
             if self.user in vc.members:
                 self.user_vc: VoiceChannel = vc
                 break
+            else:
+                self.user_vc = None
+
+    def get_context_data(self) -> dict:
+        return {
+            "user": self.user,
+            "server": self.server,
+            "server_vcs": self.server_vcs,
+            "user_vc": self.user_vc,
+        }

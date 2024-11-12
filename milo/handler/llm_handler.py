@@ -40,11 +40,52 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "responder_default",
+                    "name": "general_default",
                     "description": """Use this function as the default
                     function. Call this function either when the user wants to
                     know about our capabilities/features or when there is no
                     proper match for any other function.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "settings_Settings_get_server_settings_as_dict",
+                    "description": """Use this function to get settings for the
+                    current server.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "settings_Settings_reset_server_settings",
+                    "description": """Only use this function if the user
+                    explicitly mentions that they want to reset server
+                    settings. The user has to use the word settings. Do not use
+                    if the user only mentions the word default or reset.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "settings_Settings_edit_server_settings",
+                    "description": """Use this function if the user wants to
+                    edit a server setting.""",
                     "parameters": {
                         "type": "object",
                         "properties": {},

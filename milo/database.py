@@ -1,11 +1,11 @@
 from peewee import (
-    SqliteDatabase,
-    Model,
-    ForeignKeyField,
     CharField,
-    AutoField,
     DateTimeField,
+    ForeignKeyField,
     IntegerField,
+    Model,
+    SqliteDatabase,
+    TextField,
 )
 from milo.loggers import get_loggers
 
@@ -17,6 +17,11 @@ sqlitedb = SqliteDatabase("data/db.sqlite3", pragmas={"foreign_keys": 1})
 class BaseModel(Model):
     class Meta:
         database = sqlitedb
+
+
+class Settings(BaseModel):
+    server_id = IntegerField(unique=True)
+    settings = TextField()
 
 
 class Franchise(BaseModel):
@@ -31,10 +36,9 @@ class Game(BaseModel):
 
 
 class Session(BaseModel):
-    id = AutoField()
     name = CharField(null=True)
     start = DateTimeField()
-    end = DateTimeField()
+    end = DateTimeField(null=True)
 
 
 class CODMatchType(BaseModel):
@@ -43,7 +47,7 @@ class CODMatchType(BaseModel):
 
 class CODMatch(BaseModel):
     session = ForeignKeyField(Session, backref="cod_matches")
-    discord_usernames = CharField()
+    discord_user_ids = CharField()
     type = ForeignKeyField(CODMatchType, backref="cod_matches")
     score_1 = IntegerField()
     score_2 = IntegerField()
@@ -54,16 +58,20 @@ class Platform(BaseModel):
     other_names = CharField()
 
 
-class User(BaseModel):
-    discord_username = CharField(unique=True)
-    platform = ForeignKeyField(Platform, backref="users")
+class Person(BaseModel):
+    discord_id = IntegerField()
     activision_id = CharField(null=True)
     steam_id = CharField(null=True)
+    platform = ForeignKeyField(Platform, backref="users")
 
 
-# simple utility function to create tables
-def create_tables() -> None:
-    with sqlitedb:
-        sqlitedb.create_tables(
-            [Franchise, Game, Session, CODMatchType, CODMatch, Platform, User]
-        )
+tables = [
+    Settings,
+    Franchise,
+    Game,
+    Session,
+    CODMatchType,
+    CODMatch,
+    Platform,
+    Person,
+]

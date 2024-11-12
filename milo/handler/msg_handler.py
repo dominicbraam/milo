@@ -8,10 +8,17 @@ app_logger = get_loggers()
 
 class MsgHandler:
 
-    async def process_message(self, message: Message, user_message: str) -> None:
+    def __init__(self, message: Message, user_message: str):
+        self.message = message
+        self.user_message = user_message
+        self.response = ""
+
+    async def process_message(self) -> str:
 
         llm_handler = LLMHandler()
-        chat_completion = llm_handler.chat_completions_custom(user_message)
+        chat_completion = llm_handler.chat_completions_custom(
+            self.user_message
+        )
         finish_reason = chat_completion.choices[0].finish_reason
         call_type = chat_completion.choices[0].message.tool_calls[0].type
 
@@ -20,19 +27,16 @@ class MsgHandler:
                 chat_completion.choices[0].message.tool_calls[0].function.name
             )
             func_args = (
-                chat_completion.choices[0].message.tool_calls[0].function.arguments
+                chat_completion.choices[0]
+                .message.tool_calls[0]
+                .function.arguments
             )
 
-            func_handler = FuncHandler(func_identifier, func_args)
-            response = func_handler.call_function()
+            func_handler = FuncHandler(
+                self.message, func_identifier, func_args
+            )
+            await func_handler.call_function()
 
-            await self.send_response(message, response)
         else:
+            await self.message.channel.send("Something went wrong.")
             app_logger.error("An unexpected error occured")
-
-    async def send_response(self, message: Message, response: str) -> None:
-
-        try:
-            await message.channel.send(response)
-        except Exception as e:
-            app_logger.error(e)
