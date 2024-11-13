@@ -8,7 +8,7 @@ from peewee import (
     TextField,
 )
 
-sqlitedb = SqliteDatabase("data/db.sqlite3", pragmas={"foreign_keys": 1})
+sqlitedb = SqliteDatabase("data/db/db.sqlite3", pragmas={"foreign_keys": 1})
 
 
 class BaseModel(Model):
@@ -59,7 +59,7 @@ class Person(BaseModel):
     discord_id = IntegerField()
     activision_id = CharField(null=True)
     steam_id = CharField(null=True)
-    platform = ForeignKeyField(Platform, backref="users")
+    platform = ForeignKeyField(Platform, backref="persons")
 
 
 tables = [

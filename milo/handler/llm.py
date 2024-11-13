@@ -1,17 +1,29 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+from openai.types.chat.chat_completion import Choice
+from typing import Union
 import json
 
 
 class LLMHandler:
+    """
+    Class to handle communication with the OpenAI API.
+
+    Attributes:
+        client: OpenAI
+        user_message: str
+        model: str
+        chat: list[dict]
+            The entire chat with llm. Fill chat if chat memory is to be used.
+    """
 
     def __init__(self, user_message: str):
         load_dotenv()
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.user_message = user_message
-        self.model = "gpt-4o-mini"
-        self.chat = [
+        self.client: OpenAI = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.user_message: str = user_message
+        self.model: str = "gpt-4o-mini"
+        self.chat: list[dict] = [
             {
                 "role": "system",
                 "content": """You are working alongside a bot called Milo that
@@ -31,8 +43,14 @@ class LLMHandler:
             },
         ]
 
-    def get_function_choice(self):
+    def get_function_choice(self) -> Choice:
+        """
+        Evaluate self.user_message using OpenAI function calling to select
+        which function to run.
 
+        Returns:
+            Choice
+        """
         completion = self.client.chat.completions.create(
             model=self.model,
             messages=self.chat,
@@ -42,15 +60,26 @@ class LLMHandler:
 
         return completion.choices[0]
 
-    def get_response(self, chat_choice, results):
+    def get_response(
+        self, chat_choice: Choice, results: Union[str, dict]
+    ) -> Choice:
+        """
+        Takes results and uses OpenAI completion to get response in a human
+        readable format.
 
+        Args:
+            chat_choice: Choice
+            results: Union[str, dict]
+
+        Returns:
+            Choice
+        """
         function_call_result_message = {
             "role": "tool",
             "content": json.dumps({"response": results}),
             "tool_call_id": chat_choice.message.tool_calls[0].id,
         }
 
-        # self.chat.append({"role": "user", "content": results})
         self.chat.append(chat_choice.message)
         self.chat.append(function_call_result_message)
 
@@ -63,6 +92,13 @@ class LLMHandler:
 
     @property
     def function_descriptions(self) -> list[dict]:
+        """
+        Creates function_description property for class. It contains tools for
+        use with OpenAI function calling.
+
+        Returns:
+            list[dict]
+        """
         return [
             {
                 "type": "function",

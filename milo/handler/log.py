@@ -2,8 +2,14 @@ import logging
 
 
 class Logger:
+    """
+    Class to create a logger object based on logger name.
 
-    def __init__(self, logger_name: str):
+    Attributes:
+        logger: str
+    """
+
+    def __init__(self, logger_name: str) -> None:
         self.logger = logging.getLogger(logger_name)
         self.logger.setLevel(logging.DEBUG)
 
@@ -17,5 +23,9 @@ class Logger:
         fileHandler.setFormatter(logFormatter)
         self.logger.addHandler(fileHandler)
 
-    def get_logger(self):
+    def get_logger(self) -> logging.Logger:
+        """
+        Returns:
+            logging.Logger
+        """
         return self.logger

@@ -1,4 +1,6 @@
-from discord import Interaction, Message
+from discord import Interaction, Message, ui
+from openai.types.chat.chat_completion import Choice
+from typing import Union
 from milo.handler.llm import LLMHandler
 from milo.globals import parent_mod
 from milo.handler.log import Logger
@@ -7,7 +9,13 @@ app_logger = Logger("milo").get_logger()
 
 
 async def process_message(message: Message, user_message: str) -> None:
+    """
+    Gets function data based on user message and tries to call that function.
 
+    Args:
+        message: Message
+        user_message: str
+    """
     llm_handler = LLMHandler(user_message)
     chat_choice = llm_handler.get_function_choice()
 
@@ -19,36 +27,84 @@ async def process_message(message: Message, user_message: str) -> None:
         await call_function(message, chat_choice)
 
     else:
-        await message.channel.reply("Something went wrong.")
+        reply_to_message(message, chat_choice, "error")
         app_logger.error("finish_reason and call_type not supported")
 
 
-async def create_response(message: Message, chat_choice, results):
+async def create_response(
+    message: Message, chat_choice: Choice, results: Union[str, dict]
+) -> str:
+    """
+    Creates response using llm.
+
+    Args:
+        message: Message
+        chat_choice: Choice
+        results: Union[str, dict]
+
+    Returns:
+        str
+    """
     llm_handler = LLMHandler(message.content)
     response = llm_handler.get_response(chat_choice, results)
     return response.message.content
 
 
-async def reply_to_message(message: Message, chat_choice, results, view=None):
+async def reply_to_message(
+    message: Message,
+    chat_choice: Choice,
+    results: Union[str, dict],
+    view: ui.View = None,
+) -> Message:
+    """
+    Replies to discord message and returns message object in case it needs to
+    be used.
+
+    Args:
+        message: Message
+        chat_choice: Choice
+        results: Union[str, dict]
+        view: ui.View
+
+    Returns:
+        Message
+    """
     response = await create_response(message, chat_choice, results)
     return await message.reply(response, view=view)
 
 
 async def reply_to_interaction(
-    interaction: Interaction, message: Message, chat_choice, results
-):
+    interaction: Interaction,
+    message: Message,
+    chat_choice: Choice,
+    results: Union[str, dict],
+    view: ui.View = None,
+) -> None:
+    """
+    Replies to discord message with interaction.
+
+    Args:
+        interaction: Interaction
+        message: Message
+        chat_choice: Choice
+        results: Union[str, dict]
+        view: ui.View
+    """
     response = await create_response(message, chat_choice, results)
-    return await interaction.response.edit_message(content=response, view=None)
+    await interaction.response.edit_message(content=response, view=view)
 
 
-async def reply_to_interaction_error(
-    interaction: Interaction, message: Message, chat_choice
-):
-    response = await create_response(message, chat_choice, "error")
-    return await interaction.response.edit_message(content=response, view=None)
+def call_function(message: Message, chat_choice: Choice):
+    """
+    Calls function based on choice from llm.
 
+    Args:
+        message: Message
+        chat_choice: Choice
 
-def call_function(message: Message, chat_choice):
+    Returns:
+        Caroutine
+    """
     func_identifier = chat_choice.message.tool_calls[0].function.name
     func_args = chat_choice.message.tool_calls[0].function.arguments
 

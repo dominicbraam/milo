@@ -1,3 +1,4 @@
+from openai.types.chat.chat_completion import Choice
 from milo.handler.discord import ConfirmView, FormModal
 from milo.handler.msg import (
     reply_to_interaction,
@@ -6,10 +7,26 @@ from milo.handler.msg import (
 
 
 def simple_response(f):
-    """decorator: runs function and replies with dictionary return result
-    as a table"""
+    """
+    Decorator: runs function and uses llm to format handle result formatting.
 
-    async def wrapper(class_obj, chat_choice):
+    Args:
+        f ()
+            function using the decorator
+    """
+
+    async def wrapper(class_obj: type, chat_choice: Choice) -> None:
+        """
+        Inner function for simple_response decorator. Runs function and replies
+        to message.
+
+        Args:
+            class_obj: type
+                The methods being called are from within a class so a class
+                object is needed. It is the same as calling the
+                function using self.f()
+            chat_choice: Choice
+        """
         results = await f(class_obj)
         await reply_to_message(class_obj.message, chat_choice, results)
 
@@ -17,24 +34,58 @@ def simple_response(f):
 
 
 def admin_privileges(f):
-    """decorator: runs function only if user is admin"""
+    """
+    Decorator: runs function only if user is admin
 
-    async def wrapper(class_obj, chat_choice):
+    Args:
+        f ()
+            function using the decorator
+    """
+
+    async def wrapper(class_obj: type, chat_choice: Choice) -> None:
+        """
+        Inner function for admin_privileges decorator. Runs function if the
+        user has admin privileges; replies with relevant message if not admin.
+
+        Args:
+            class_obj: type
+                The methods being called are from within a class so a class
+                object is needed. It is the same as calling the
+                function using self.f()
+            chat_choice: Choice
+        """
         if not class_obj.message.author.guild_permissions.administrator:
             await reply_to_message(class_obj.message, chat_choice, "not admin")
         else:
-            return await f(class_obj, chat_choice)
+            await f(class_obj, chat_choice)
 
     return wrapper
 
 
 def confirm_decision_response(additional_process=None):
-    """decorator: takes in function, lets user choose to continue or
-    not. if the choice is continue, run function. if not, cancel operation."""
-    """options: None, form"""
+    """
+    Decorator: Prompts the user to confirm if they would like to continue with
+    the task. If yes, continue and if no, exit. The function can create an
+    additional interaction for the user if necessary.
+
+    Args:
+        additional_process: Union[str, None]
+            options: "form", None
+    """
 
     def function_collector(f):
-        async def wrapper(class_obj, chat_choice):
+        async def wrapper(class_obj: type, chat_choice: Choice):
+            """
+            Inner function to handle the views. First the confirm view and then
+            another view if specified.
+
+            Args:
+                class_obj: type
+                    The methods being called are from within a class so a class
+                    object is needed. It is the same as calling the
+                    function using self.f()
+                chat_choice: Choice
+            """
             confirm_view = ConfirmView(class_obj=class_obj)
 
             confirm_view.bot_message_obj = await reply_to_message(
@@ -49,10 +100,6 @@ def confirm_decision_response(additional_process=None):
             match confirm_view.exit_status:
                 case "continued":
                     match additional_process:
-                        # when case None, the supplied function runs directly
-                        # without any additional processes being involved
-                        case None:
-                            results = await f(class_obj)
                         case "form":
                             form_modal = FormModal(
                                 title="test", class_obj=class_obj
@@ -68,33 +115,32 @@ def confirm_decision_response(additional_process=None):
                                     results = await f(
                                         class_obj, form_modal.results
                                     )
-                                    await reply_to_interaction(
-                                        form_modal.interaction,
-                                        class_obj.message,
-                                        chat_choice,
-                                        results,
-                                    )
                                 case "error":
-                                    await reply_to_interaction(
-                                        form_modal.interaction,
-                                        class_obj.message,
-                                        chat_choice,
-                                        results,
-                                    )
+                                    results = form_modal.exit_status
+                        case _:
+                            results = await f(class_obj)
 
                 case _:
                     results = confirm_view.exit_status
 
-            if not (
-                confirm_view.exit_status == "continued"
-                and additional_process == "form"
-            ):
-                confirm_view.bot_message_obj = await reply_to_interaction(
-                    confirm_view.interaction,
-                    class_obj.message,
-                    chat_choice,
-                    results,
-                )
+            if confirm_view.interaction is not None:
+                if (
+                    confirm_view.exit_status == "continued"
+                    and additional_process == "form"
+                ):
+                    await reply_to_interaction(
+                        form_modal.interaction,
+                        class_obj.message,
+                        chat_choice,
+                        results,
+                    )
+                else:
+                    await reply_to_interaction(
+                        confirm_view.interaction,
+                        class_obj.message,
+                        chat_choice,
+                        results,
+                    )
 
         return wrapper
 
