@@ -1,34 +1,64 @@
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
+import json
 
 
 class LLMHandler:
 
-    def __init__(self):
+    def __init__(self, user_message: str):
         load_dotenv()
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-    def chat_completions_custom(self, user_message: str):
-        messages = [
+        self.user_message = user_message
+        self.model = "gpt-4o-mini"
+        self.chat = [
             {
                 "role": "system",
-                "content": """You are a manager for gamebattles and scrims for
-                Call of Duty. You provide information and organise scrims/
-                game battles.""",
+                "content": """You are working alongside a bot called Milo that
+                runs functions to help manage gaming sessions. You don't need
+                to be very expressive other than providing the user with the
+                results in a readable format for a discord user. I say this
+                because these reponses will be rendered in a discord chat.
+                I mean it. Keep your responses very short and concise.
+                There are some cases where the reply will be an empty value.
+                That just means that the function called was run successfully
+                and you can tell the user that.""",
             },
             {
                 "role": "user",
-                "content": user_message,
+                "content": self.user_message,
             },
         ]
 
-        return self.client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
+    def get_function_choice(self):
+
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=self.chat,
             tools=self.function_descriptions,
             tool_choice="required",
         )
+
+        return completion.choices[0]
+
+    def get_response(self, chat_choice, results):
+
+        function_call_result_message = {
+            "role": "tool",
+            "content": json.dumps({"response": results}),
+            "tool_call_id": chat_choice.message.tool_calls[0].id,
+        }
+
+        # self.chat.append({"role": "user", "content": results})
+        self.chat.append(chat_choice.message)
+        self.chat.append(function_call_result_message)
+
+        response = self.client.chat.completions.create(
+            model=self.model,
+            messages=self.chat,
+        )
+
+        return response.choices[0]
 
     @property
     def function_descriptions(self) -> list[dict]:

@@ -5,8 +5,8 @@ import toml
 from milo.handler.database import Settings as SettingsTbl
 from milo.handler.response import (
     admin_privileges,
-    confirm_decision,
-    respond_table_from_dict,
+    confirm_decision_response,
+    simple_response,
 )
 from milo.globals import bot_server_id
 
@@ -54,7 +54,7 @@ class Settings:
         self.__ensure_settings_exist_for_server()
 
     @property
-    def settings_options(self):
+    def fields(self):
         settings_obj = self.__get_settings(self.message.guild.id)
         settings_model = self.__settings_json_to_model(
             ServerSettings, settings_obj.settings
@@ -67,7 +67,7 @@ class Settings:
             },
         }
 
-    @respond_table_from_dict
+    @simple_response
     async def get_server_settings_as_dict(self) -> dict:
         """get bot settings for server"""
 
@@ -79,8 +79,8 @@ class Settings:
         return settings_model.dict()
 
     @admin_privileges
-    @confirm_decision(additional_process=None)
-    async def reset_server_settings(self) -> str:
+    @confirm_decision_response(additional_process=None)
+    async def reset_server_settings(self) -> None:
         """reset settings to default values for server"""
 
         settings_obj = self.__get_settings(self.message.guild.id)
@@ -89,11 +89,9 @@ class Settings:
         settings_obj.settings = default_settings_obj.settings
         settings_obj.save()
 
-        return "Default settings applied."
-
     @admin_privileges
-    @confirm_decision(additional_process="form")
-    async def edit_server_settings(self, updated_settings: dict) -> str:
+    @confirm_decision_response(additional_process="form")
+    async def edit_server_settings(self, updated_settings: dict) -> None:
         """edit settings"""
 
         settings_obj = self.__get_settings(self.message.guild.id)
@@ -101,8 +99,6 @@ class Settings:
         new_settings = ServerSettings.parse_obj(updated_settings)
         settings_obj.settings = new_settings.model_dump_json()
         settings_obj.save()
-
-        return "Settings updated."
 
     def __get_settings(self, server_id: int):
         """get current server settings"""

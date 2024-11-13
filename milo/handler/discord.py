@@ -28,13 +28,11 @@ class DiscordHandler:
 
 
 class ConfirmView(ui.View):
-    def __init__(self, *, timeout=5, function, class_obj, additional_process):
+    def __init__(self, *, timeout=5, class_obj):
         super().__init__(timeout=timeout)
-        self.additional_process = additional_process
-        self.function = function
-        self.class_obj = class_obj
         self.user_message_obj = class_obj.message
         self.bot_message_obj = None
+        self.exit_status = None
 
     async def on_timeout(self):
         # disable buttons after on timeout
@@ -46,57 +44,36 @@ class ConfirmView(ui.View):
     async def interaction_check(self, interaction: Interaction):
         # reject any user that isn't the author of the message
         if interaction.user != self.user_message_obj.author:
-            await interaction.response.edit_message(
-                content=f"""{interaction.user.name} cannot complete request for
-                {self.user_message_obj.author.name}.""",
-            )
+            self.exit_status = "not_author"
+            self.interaction = interaction
+            self.stop()
+
             return False
         return True
 
     @ui.button(label="Continue", style=ButtonStyle.green)
     async def confirm(self, interaction: Interaction, button: ui.Button):
-        match self.additional_process:
-            # when case None, the supplied function runs directly without any
-            # any additional processes being involved
-            case None:
-                response = await self.function(self.class_obj)
-                # after getting a response, remove buttons and replace message
-                # with response
-                self.bot_message_obj = await interaction.response.edit_message(
-                    content=response, view=None
-                )
-            case "form":
-                self.bot_message_obj = await interaction.response.send_modal(
-                    Form(
-                        title="test",
-                        function=self.function,
-                        class_obj=self.class_obj,
-                    )
-                )
-            case _:
-                self.bot_message_obj = await interaction.response.edit_message(
-                    content="Something went wrong", view=None
-                )
+        self.exit_status = "continued"
+        self.interaction = interaction
+        self.stop()
 
     @ui.button(label="Cancel", style=ButtonStyle.red)
     async def cancel(self, interaction: Interaction, button: ui.Button):
-        self.bot_message_obj = await interaction.response.edit_message(
-            content="Operation cancelled.", view=None
-        )
+        self.exit_status = "cancelled"
+        self.interaction = interaction
+        self.stop()
 
 
-class Form(ui.Modal):
-    def __init__(self, *, title, function, class_obj):
+class FormModal(ui.Modal):
+    def __init__(self, *, title, class_obj):
         super().__init__(title=title)
-        self.function = function
         self.class_obj = class_obj
-        self.user_message_obj = self.class_obj.message
         self.results = dict()
 
-        for field in class_obj.settings_fields:
-            current = class_obj.settings_options[field].get("current")
-            options = class_obj.settings_options[field].get("options")
-            units = class_obj.settings_options[field].get("units")
+        for field in class_obj.fields:
+            current = class_obj.fields[field].get("current")
+            options = class_obj.fields[field].get("options")
+            units = class_obj.fields[field].get("units")
             if options:
                 self.add_item(FormDropdown(field, options))
             else:
@@ -105,15 +82,15 @@ class Form(ui.Modal):
     async def on_submit(self, interaction: Interaction):
         for child in self.children:
             self.results[child.custom_id] = child.value
-        response = await self.function(self.class_obj, self.results)
-        await interaction.response.edit_message(content=response, view=None)
+
+        self.interaction = interaction
+        self.exit_status = "submitted"
 
     async def on_error(
         self, interaction: Interaction, error: Exception
     ) -> None:
-        await interaction.response.edit_message(
-            content="Oops! Something went wrong.", view=None
-        )
+        self.interaction = interaction
+        self.exit_status = "error"
 
 
 class FormDropdown(ui.Select):

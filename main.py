@@ -1,7 +1,7 @@
 from discord import Message, Guild
 from milo.handler.database import sqlitedb, tables
 from milo.handler.discord import DiscordHandler
-from milo.handler.msg import MsgHandler
+from milo.handler.msg import process_message
 from milo.mods.settings import (
     insert_default_server_settings,
 )
@@ -45,8 +45,7 @@ def main() -> None:
             user_message = user_message.lstrip()
 
             app_logger.info(f"[{channel}] {username}: '{user_message}'")
-            msg_handler = MsgHandler(message, user_message)
-            await msg_handler.process_message()
+            await process_message(message, user_message)
 
     dc_handler.run()
 
