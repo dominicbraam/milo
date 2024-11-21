@@ -1,14 +1,15 @@
-from openai.types.chat.chat_completion import Choice
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from milo.handler.discord import ConfirmView, FormModal
-from milo.handler.msg import (
-    reply_to_interaction,
-    reply_to_message,
-)
+from milo.handler.responders import Responder
+
+if TYPE_CHECKING:
+    from openai.types.chat.chat_completion import Choice
 
 
 def simple_response(f):
     """
-    Decorator: runs function and uses llm to format handle result formatting.
+    Decorator: runs function and uses llm to handle result formatting.
 
     Args:
         f ()
@@ -28,7 +29,8 @@ def simple_response(f):
             chat_choice: Choice
         """
         results = await f(class_obj)
-        await reply_to_message(class_obj.message, chat_choice, results)
+        responder = Responder(class_obj.llm_handler, chat_choice, results)
+        await responder.reply_to_message(class_obj.message)
 
     return wrapper
 
@@ -55,7 +57,12 @@ def admin_privileges(f):
             chat_choice: Choice
         """
         if not class_obj.message.author.guild_permissions.administrator:
-            await reply_to_message(class_obj.message, chat_choice, "not admin")
+            responder = Responder(
+                class_obj.llm_handler,
+                chat_choice,
+                "not_admin",
+            )
+            await responder.reply_to_message(class_obj.message)
         else:
             await f(class_obj, chat_choice)
 
@@ -88,11 +95,14 @@ def confirm_decision_response(additional_process=None):
             """
             confirm_view = ConfirmView(class_obj=class_obj)
 
-            confirm_view.bot_message_obj = await reply_to_message(
-                class_obj.message,
+            responder = Responder(
+                class_obj.llm_handler,
                 chat_choice,
                 "ask if they are sure if they want to continue with the task",
                 confirm_view,
+            )
+            confirm_view.bot_message_obj = await responder.reply_to_message(
+                class_obj.message
             )
 
             await confirm_view.wait()
@@ -103,7 +113,7 @@ def confirm_decision_response(additional_process=None):
                         case "form":
                             form_modal = FormModal(
                                 title="test", class_obj=class_obj
-                            )
+                            )  # TODO: find a way to create title dynamically
 
                             await confirm_view.interaction.response.send_modal(
                                 form_modal
@@ -123,23 +133,27 @@ def confirm_decision_response(additional_process=None):
                 case _:
                     results = confirm_view.exit_status
 
+            responder = Responder(
+                class_obj.llm_handler,
+                chat_choice,
+                results,
+            )
+            # only reply if there is an interaction from user
             if confirm_view.interaction is not None:
                 if (
                     confirm_view.exit_status == "continued"
                     and additional_process == "form"
                 ):
-                    await reply_to_interaction(
-                        form_modal.interaction,
-                        class_obj.message,
-                        chat_choice,
-                        results,
+                    # reply using form interaction if and only if
+                    # the user continued
+                    await responder.reply_to_interaction(
+                        form_modal.interaction
                     )
                 else:
-                    await reply_to_interaction(
-                        confirm_view.interaction,
-                        class_obj.message,
-                        chat_choice,
-                        results,
+                    # reply directly to confirm view message for
+                    # everything else
+                    await responder.reply_to_interaction(
+                        confirm_view.interaction
                     )
 
         return wrapper

@@ -1,12 +1,14 @@
-from discord import Message, Guild
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from milo.handler.database import sqlitedb, tables
 from milo.handler.discord import DiscordHandler
-from milo.handler.msg import process_message
-from milo.mods.settings import (
-    insert_default_server_settings,
-)
-from milo.globals import bot_name, bot_name_len, bot_server_id
 from milo.handler.log import Logger
+from milo.handler.msg import process_message
+from milo.mods.settings import insert_default_settings_from_file
+
+if TYPE_CHECKING:
+    from discord import Message, Guild
+
 
 app_logger = Logger("milo").get_logger()
 Logger("discord").get_logger()
@@ -17,14 +19,16 @@ Logger("peewee").get_logger()
 def main() -> None:
 
     sqlitedb.connect()
-    sqlitedb.create_tables(tables)
-    insert_default_server_settings(bot_server_id)
+    sqlitedb.create_tables(tables, safe=True)
+    insert_default_settings_from_file("server")
 
     dc_handler = DiscordHandler()
 
     @dc_handler.client.event
     async def on_guild_join(guild: Guild) -> None:
-        insert_default_server_settings(guild.id)
+        app_logger.info(
+            f"Joined new server with name = {guild.name} and id = {guild.id}"
+        )
 
     @dc_handler.client.event
     async def on_ready() -> None:
@@ -32,20 +36,11 @@ def main() -> None:
 
     @dc_handler.client.event
     async def on_message(message: Message) -> None:
-        username: str = str(message.author)
-        user_message: str = message.content
-        channel: str = str(message.channel)
 
-        if username == dc_handler.client.user:
+        if message.author == dc_handler.client.user:
             return
 
-        user_message = user_message.lower()
-        if user_message.startswith(bot_name):
-            user_message = user_message[bot_name_len:]
-            user_message = user_message.lstrip()
-
-            app_logger.info(f"[{channel}] {username}: '{user_message}'")
-            await process_message(message, user_message)
+        await process_message(dc_handler, message)
 
     dc_handler.run()
 

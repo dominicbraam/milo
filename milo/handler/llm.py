@@ -1,9 +1,14 @@
+from __future__ import annotations
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
-from openai.types.chat.chat_completion import Choice
-from typing import Union
+from typing import TYPE_CHECKING
 import json
+from milo.mods.settings import groups as settings_groups
+
+if TYPE_CHECKING:
+    from typing import Union
+    from openai.types.chat.chat_completion import Choice
 
 
 class LLMHandler:
@@ -12,22 +17,22 @@ class LLMHandler:
 
     Attributes:
         client: OpenAI
-        user_message: str
         model: str
-        chat: list[dict]
+        chat_record: list[dict]
             The entire chat with llm. Fill chat if chat memory is to be used.
     """
 
-    def __init__(self, user_message: str):
+    def __init__(self):
         load_dotenv()
         self.client: OpenAI = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.user_message: str = user_message
         self.model: str = "gpt-4o-mini"
-        self.chat: list[dict] = [
+        self.chat_record: list[dict] = [
             {
                 "role": "system",
-                "content": """You are working alongside a bot called Milo that
-                runs functions to help manage gaming sessions. You don't need
+                "content": """You are working as a bot called Milo that
+                runs functions to help manage gaming sessions. There are going
+                to be times where you need more information. Ask for that
+                information when necessary; do not assume. You don't need
                 to be very expressive other than providing the user with the
                 results in a readable format using markdown for a discord user.
                 Use markdown codeblocks whenever displaying tables. If there is
@@ -36,12 +41,23 @@ class LLMHandler:
                 the reply will be an empty value. That just means that the
                 function called was run successfully and you can tell the user
                 that.""",
-            },
-            {
-                "role": "user",
-                "content": self.user_message,
-            },
+            }
         ]
+
+    def add_message_to_record(self, role: str, message: str) -> None:
+        """
+        Add messages to self.chat_record
+
+        Args:
+            role: str
+            message: str
+        """
+        self.chat_record.append(
+            {
+                "role": role,
+                "content": message,
+            }
+        )
 
     def get_function_choice(self) -> Choice:
         """
@@ -53,9 +69,8 @@ class LLMHandler:
         """
         completion = self.client.chat.completions.create(
             model=self.model,
-            messages=self.chat,
+            messages=self.chat_record,
             tools=self.function_descriptions,
-            tool_choice="required",
         )
 
         return completion.choices[0]
@@ -74,18 +89,20 @@ class LLMHandler:
         Returns:
             Choice
         """
-        function_call_result_message = {
-            "role": "tool",
-            "content": json.dumps({"response": results}),
-            "tool_call_id": chat_choice.message.tool_calls[0].id,
-        }
 
-        self.chat.append(chat_choice.message)
-        self.chat.append(function_call_result_message)
+        if chat_choice.finish_reason == "tool_calls":
+            self.chat_record.append(chat_choice.message)
+            self.chat_record.append(
+                {
+                    "role": "tool",
+                    "content": json.dumps({"response": results}),
+                    "tool_call_id": chat_choice.message.tool_calls[0].id,
+                }
+            )
 
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.chat,
+            messages=self.chat_record,
         )
 
         return response.choices[0]
@@ -118,12 +135,18 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "settings_Settings_get_server_settings_as_dict",
-                    "description": """Use this function to get settings for the
-                    current server.""",
+                    "name": "settings_Settings_get_settings_as_dict",
+                    "description": """Use this function to get settings for
+                    either the server, personal account.""",
                     "parameters": {
                         "type": "object",
-                        "properties": {},
+                        "properties": {
+                            "group": {
+                                "type": "string",
+                                "enum": settings_groups,
+                            }
+                        },
+                        "required": ["group"],
                         "additionalProperties": False,
                     },
                 },

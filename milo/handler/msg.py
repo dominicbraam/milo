@@ -1,112 +1,147 @@
-from discord import Interaction, Message, ui
-from openai.types.chat.chat_completion import Choice
-from typing import Union
+from __future__ import annotations
+from asyncio import TimeoutError
+from typing import TYPE_CHECKING
+from milo.globals import (
+    bot_name,
+    bot_name_len,
+    parent_mod,
+    timeout_wait_for_reply,
+)
 from milo.handler.llm import LLMHandler
-from milo.globals import parent_mod
 from milo.handler.log import Logger
+import json
+
+if TYPE_CHECKING:
+    from discord import Message
+    from openai.types.chat.chat_completion import Choice
+    from milo.handler.discord import DiscordHandler
+
 
 app_logger = Logger("milo").get_logger()
 
 
-async def process_message(message: Message, user_message: str) -> None:
-    """
-    Gets function data based on user message and tries to call that function.
-
-    Args:
-        message: Message
-        user_message: str
-    """
-    llm_handler = LLMHandler(user_message)
-    chat_choice = llm_handler.get_function_choice()
-
-    if (
-        chat_choice.finish_reason == "tool_calls"
-        and chat_choice.message.tool_calls[0].type == "function"
-    ):
-
-        await call_function(message, chat_choice)
-
-    else:
-        reply_to_message(message, chat_choice, "error")
-        app_logger.error("finish_reason and call_type not supported")
-
-
-async def create_response(
-    message: Message, chat_choice: Choice, results: Union[str, dict]
-) -> str:
-    """
-    Creates response using llm.
-
-    Args:
-        message: Message
-        chat_choice: Choice
-        results: Union[str, dict]
-
-    Returns:
-        str
-    """
-    llm_handler = LLMHandler(message.content)
-    response = llm_handler.get_response(chat_choice, results)
-    return response.message.content
-
-
-async def reply_to_message(
+async def process_message(
+    dc_handler: DiscordHandler,
     message: Message,
-    chat_choice: Choice,
-    results: Union[str, dict],
-    view: ui.View = None,
-) -> Message:
-    """
-    Replies to discord message and returns message object in case it needs to
-    be used.
-
-    Args:
-        message: Message
-        chat_choice: Choice
-        results: Union[str, dict]
-        view: ui.View
-
-    Returns:
-        Message
-    """
-    response = await create_response(message, chat_choice, results)
-    return await message.reply(response, view=view)
-
-
-async def reply_to_interaction(
-    interaction: Interaction,
-    message: Message,
-    chat_choice: Choice,
-    results: Union[str, dict],
-    view: ui.View = None,
+    llm_handler: LLMHandler = None,
 ) -> None:
     """
-    Replies to discord message with interaction.
+    Gets function data based on user message and tries to call that function.
+    It will recursively call itself if the bot needs more information to make
+    a decision.
 
     Args:
-        interaction: Interaction
+        dc_handler: DiscordHandler
         message: Message
-        chat_choice: Choice
-        results: Union[str, dict]
-        view: ui.View
+        llm_handler: LLMHandler
     """
-    response = await create_response(message, chat_choice, results)
-    await interaction.response.edit_message(content=response, view=view)
+    username = str(message.author)
+    message_content = str(message.content)
+    channel = str(message.channel)
+
+    message_content = message_content.lower()
+    # stop processing if the bot name wasn't used as an initial message
+    # or if an llm_handler does not exist (it will exist if it is a reply
+    # message in an already started chat with the bot
+    if not (message_content.startswith(bot_name) or llm_handler):
+        return
+
+    # create new variable without bot name in message for further processing
+    if message_content.startswith(bot_name):
+        user_message = message_content[bot_name_len:]
+    else:
+        user_message = message_content
+
+    user_message = user_message.lstrip()
+    # TODO: logging twice
+    app_logger.info(f"[{channel}] {username}: '{user_message}'")
+
+    # create llm_handler if not already created (only created when the function
+    # is called recursively). used to keep track of chat session with bot
+    if not llm_handler:
+        llm_handler = LLMHandler()
+    llm_handler.add_message_to_record("user", user_message)
+    chat_choice = llm_handler.get_function_choice()
+    finish_reason = chat_choice.finish_reason
+
+    if finish_reason == "stop":
+        # runs whenever OpenAI does not have enough information to make a
+        # function call
+        reply_assistant = chat_choice.message.content
+        llm_handler.add_message_to_record("assistant", reply_assistant)
+        message_assistant = await message.reply(reply_assistant)
+
+        def check_for_reply(m):
+            if m.reference is not None:
+                if is_reply_to_message(m, message_assistant):
+                    return True
+            return False
+
+        # let Discord wait for reply to assistant message with specified
+        # timeout
+        try:
+            message_reply_user = await dc_handler.client.wait_for(
+                "message",
+                check=check_for_reply,
+                timeout=timeout_wait_for_reply,
+            )
+        # TODO: replies even if the message has nothing to do with bot
+        # functions. For example, if there is a random question like
+        # asking who it is, it will repond like a human and then respond
+        # with "Ignoring. Took too long." even though there is no prompt
+        # for a response - no prompt is the expected behaviour.
+        except TimeoutError:
+            await message.reply("Ignoring. Took too long.")
+            return
+
+        # if there is a user reply, recursively call function
+        if message_reply_user:
+            await process_message(dc_handler, message_reply_user, llm_handler)
+
+    # once there is enough information, make funciton call
+    elif finish_reason == "tool_calls":
+        if chat_choice.message.tool_calls[0].type == "function":
+            await call_function(message, chat_choice, llm_handler)
+
+    else:
+        await message.reply("Something went wrong.")
+        app_logger.error(f"""finish_reason: {finish_reason} not supported""")
 
 
-def call_function(message: Message, chat_choice: Choice):
+def is_reply_to_message(message: Message, reply_message: Message) -> bool:
+    """
+    Check if the message is a reply to another message.
+
+    Args:
+        message: Message
+        reply_message: Message
+
+    Returns:
+        bool
+    """
+    if message.reference.message_id == reply_message.id:
+        return True
+    return False
+
+
+def call_function(
+    message: Message, chat_choice: Choice, llm_handler: LLMHandler
+):
     """
     Calls function based on choice from llm.
 
     Args:
         message: Message
         chat_choice: Choice
+        llm_handler: LLMHandler
 
     Returns:
         Caroutine
     """
     func_identifier = chat_choice.message.tool_calls[0].function.name
-    func_args = chat_choice.message.tool_calls[0].function.arguments
+    func_args = json.loads(
+        chat_choice.message.tool_calls[0].function.arguments
+    )
 
     d = "_"
     split_data = func_identifier.split(d)
@@ -115,5 +150,5 @@ def call_function(message: Message, chat_choice: Choice):
     func_name = d.join(split_data[2:])
 
     module = __import__(f"{parent_mod}.{module_name}", fromlist=["object"])
-    class_obj = getattr(module, class_name)(message, func_args)
+    class_obj = getattr(module, class_name)(message, func_args, llm_handler)
     return getattr(class_obj, func_name)(chat_choice)

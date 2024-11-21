@@ -1,15 +1,19 @@
-from typing import Optional, Final
+from __future__ import annotations
 import os
-from dotenv import load_dotenv
 from discord import (
     ButtonStyle,
     Client,
     Intents,
-    Interaction,
-    Message,
     SelectOption,
     ui,
 )
+from dotenv import load_dotenv
+from typing import TYPE_CHECKING
+from milo.globals import timeout_wait_for_button_interaction
+
+if TYPE_CHECKING:
+    from typing import Optional, Final
+    from discord import Interaction, Message
 
 
 class DiscordHandler:
@@ -59,7 +63,9 @@ class ConfirmView(ui.View):
               'premature', 'continued', 'cancelled', 'not_author', 'error'
     """
 
-    def __init__(self, *, timeout=5, class_obj: type) -> None:
+    def __init__(
+        self, *, timeout=timeout_wait_for_button_interaction, class_obj: type
+    ) -> None:
         super().__init__(timeout=timeout)
         self.user_message_obj: Message = class_obj.message
         self.bot_message_obj: Optional[Message] = None
@@ -150,15 +156,15 @@ class FormModal(ui.Modal):
         self.interaction: Interaction = None
         self.exit_status: str = "error"
 
-        for field in class_obj.fields:
+        for field in class_obj.fields_extra_data:
             # loop to populate form with fields. max = 5 fields
-            current = class_obj.fields[field].get("current")
-            options = class_obj.fields[field].get("options")
-            units = class_obj.fields[field].get("units")
+            value = field.get("value")
+            options = field.get("options")
+            unit = field.get("unit")
             if options:
                 self.add_item(FormDropdown(field, options))
             else:
-                self.add_item(FormText(field, units, current))
+                self.add_item(FormText(field, value, unit))
 
     async def on_submit(self, interaction: Interaction):
         """
@@ -205,10 +211,10 @@ class FormDropdown(ui.Select):
 
 
 class FormText(ui.TextInput):
-    def __init__(self, field, units, current):
-        label = f"{field} ({units})"
+    def __init__(self, field, value, unit):
+        label = f"{field} ({unit})"
         super().__init__(
             custom_id=field,
             label=label,
-            default=current,
+            default=value,
         )
