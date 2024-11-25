@@ -1,5 +1,6 @@
 from __future__ import annotations
 import logging
+import os
 import tempfile
 from asyncio import TimeoutError, sleep
 from discord import (
@@ -9,6 +10,7 @@ from discord import (
     utils,
     VoiceState,
 )
+from dotenv import load_dotenv
 from typing import TYPE_CHECKING, Union
 from yt_dlp import YoutubeDL
 from milo.handler.action_decorators import no_response, simple_response
@@ -52,6 +54,9 @@ class DiscordAudio:
         Returns:
             dict
         """
+        load_dotenv()
+        proxy = os.getenv("PROXY")
+
         return {
             "verbose": True,
             "geo-bypass": True,
@@ -68,6 +73,7 @@ class DiscordAudio:
                 }
             ],
             "nocheckcertificate": True,
+            "proxy": proxy,
         }
 
     async def get_voice_client(self) -> VoiceClient:
