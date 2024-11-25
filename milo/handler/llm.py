@@ -30,13 +30,12 @@ class LLMHandler:
             {
                 "role": "system",
                 "content": """You are working as a bot called Milo that
-                runs functions to help manage gaming sessions. There are going
-                to be times where you need more information. Ask for that
-                information when necessary; do not assume. You don't need
-                to be very expressive other than providing the user with the
-                results in a readable format using markdown for a discord user.
-                Use markdown codeblocks whenever displaying tables. If there is
-                a json object, try to add it in a table. I mean it. Keep your
+                runs functions play music, text to speech, help manage gaming
+                sessions. Ask for more information when necessary. You don't
+                need to be very expressive other than providing the user with
+                the results in a readable format using markdown for a discord
+                user. Use markdown codeblocks whenever displaying tables. If
+                there is a json object, try to add it in a table. Keep your
                 responses very short and concise. There are some cases where
                 the reply will be an empty value. That just means that the
                 function called was run successfully and you can tell the user
@@ -107,6 +106,22 @@ class LLMHandler:
 
         return response.choices[0]
 
+    def text_to_speech(self, filepath: str, text: str) -> None:
+        """
+        Text to speech.
+
+        Args:
+            filepath (): str
+            text (): str
+        """
+        response = self.client.audio.speech.create(
+            model="tts-1",
+            voice="onyx",
+            input=text,
+        )
+
+        response.stream_to_file(filepath)
+
     @property
     def function_descriptions(self) -> list[dict]:
         """
@@ -120,7 +135,7 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "general_default",
+                    "name": "general_General_default",
                     "description": """Use this function as the default
                     function. Call this function either when the user wants to
                     know about our capabilities/features or when there is no
@@ -136,8 +151,8 @@ class LLMHandler:
                 "type": "function",
                 "function": {
                     "name": "settings_Settings_get_settings_as_dict",
-                    "description": """Use this function to get settings for
-                    either the server, personal account.""",
+                    "description": """Use this function to get and show
+                    settings.""",
                     "parameters": {
                         "type": "object",
                         "properties": {
@@ -154,11 +169,89 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "settings_Settings_reset_server_settings",
+                    "name": "settings_Settings_reset_settings",
                     "description": """Only use this function if the user
-                    explicitly mentions that they want to reset server
-                    settings. The user has to use the word settings. Do not use
-                    if the user only mentions the word default or reset.""",
+                    explicitly mentions that they want to reset settings.
+                    The user has to use the word settings. Do not use if
+                    the user only mentions the word default or reset.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "group": {
+                                "type": "string",
+                                "enum": settings_groups,
+                            }
+                        },
+                        "required": ["group"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "settings_Settings_edit_settings",
+                    "description": """Use this function if the user wants to
+                    edit the settings.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "group": {
+                                "type": "string",
+                                "enum": settings_groups,
+                            }
+                        },
+                        "required": ["group"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "audio_DiscordAudio_say_text",
+                    "description": """Use this function if the user wants to
+                    say a piece of text.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "text": {
+                                "type": "string",
+                                "description": """Just text. Whatever comes
+                                after say""",
+                            }
+                        },
+                        "required": ["text"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "audio_DiscordAudio_play_from_url",
+                    "description": """Use this function if the user wants to
+                    play sound.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {
+                                "type": "string",
+                                "description": """A url from website
+                                (most likely YouTube)""",
+                            }
+                        },
+                        "required": ["url"],
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "audio_DiscordAudio_pause",
+                    "description": """Use this function if the user wants to
+                    pause sound.""",
                     "parameters": {
                         "type": "object",
                         "properties": {},
@@ -169,9 +262,22 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "settings_Settings_edit_server_settings",
+                    "name": "audio_DiscordAudio_resume",
                     "description": """Use this function if the user wants to
-                    edit a server setting.""",
+                    resume sound.""",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {},
+                        "additionalProperties": False,
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "audio_DiscordAudio_stop",
+                    "description": """Use this function if the user wants to
+                    stop sound.""",
                     "parameters": {
                         "type": "object",
                         "properties": {},

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from asyncio import TimeoutError
 from typing import TYPE_CHECKING
+from milo.handler.discord import is_reply_to_message
 from milo.globals import (
     bot_name,
     bot_name_len,
@@ -101,36 +102,24 @@ async def process_message(
     # once there is enough information, make funciton call
     elif finish_reason == "tool_calls":
         if chat_choice.message.tool_calls[0].type == "function":
-            await call_function(message, chat_choice, llm_handler)
+            await call_function(dc_handler, message, chat_choice, llm_handler)
 
     else:
         await message.reply("Something went wrong.")
         app_logger.error(f"""finish_reason: {finish_reason} not supported""")
 
 
-def is_reply_to_message(message: Message, reply_message: Message) -> bool:
-    """
-    Check if the message is a reply to another message.
-
-    Args:
-        message: Message
-        reply_message: Message
-
-    Returns:
-        bool
-    """
-    if message.reference.message_id == reply_message.id:
-        return True
-    return False
-
-
 def call_function(
-    message: Message, chat_choice: Choice, llm_handler: LLMHandler
+    dc_handler: DiscordHandler,
+    message: Message,
+    chat_choice: Choice,
+    llm_handler: LLMHandler,
 ):
     """
     Calls function based on choice from llm.
 
     Args:
+        dc_handler: DiscordHandler
         message: Message
         chat_choice: Choice
         llm_handler: LLMHandler
@@ -150,5 +139,10 @@ def call_function(
     func_name = d.join(split_data[2:])
 
     module = __import__(f"{parent_mod}.{module_name}", fromlist=["object"])
-    class_obj = getattr(module, class_name)(message, func_args, llm_handler)
-    return getattr(class_obj, func_name)(chat_choice)
+    class_obj = getattr(module, class_name)(
+        dc_handler, message, func_args, llm_handler
+    )
+    try:
+        return getattr(class_obj, func_name)(chat_choice)
+    except Exception as e:
+        app_logger.error(e)

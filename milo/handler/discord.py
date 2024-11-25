@@ -156,15 +156,16 @@ class FormModal(ui.Modal):
         self.interaction: Interaction = None
         self.exit_status: str = "error"
 
-        for field in class_obj.fields_extra_data:
+        for field_key in class_obj.fields_extra_data:
             # loop to populate form with fields. max = 5 fields
-            value = field.get("value")
-            options = field.get("options")
-            unit = field.get("unit")
+            field_data = class_obj.fields_extra_data.get(field_key)
+            value = field_data.get("value")
+            options = field_data.get("options")
+            unit = field_data.get("unit")
             if options:
-                self.add_item(FormDropdown(field, options))
+                self.add_item(FormDropdown(field_key, options))
             else:
-                self.add_item(FormText(field, value, unit))
+                self.add_item(FormText(field_key, value, unit))
 
     async def on_submit(self, interaction: Interaction):
         """
@@ -218,3 +219,19 @@ class FormText(ui.TextInput):
             label=label,
             default=value,
         )
+
+
+def is_reply_to_message(message: Message, reply_message: Message) -> bool:
+    """
+    Check if the message is a reply to another message.
+
+    Args:
+        message: Message
+        reply_message: Message
+
+    Returns:
+        bool
+    """
+    if message.reference.message_id == reply_message.id:
+        return True
+    return False

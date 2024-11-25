@@ -7,6 +7,32 @@ if TYPE_CHECKING:
     from openai.types.chat.chat_completion import Choice
 
 
+def no_response(f):
+    """
+    Decorator: runs function without responding.
+
+    Args:
+        f ()
+            function using the decorator
+    """
+
+    async def wrapper(class_obj: type, chat_choice: Choice) -> None:
+        """
+        Inner function for simple_response decorator. Runs function and replies
+        to message.
+
+        Args:
+            class_obj: type
+                The methods being called are from within a class so a class
+                object is needed. It is the same as calling the
+                function using self.f()
+            chat_choice: Choice
+        """
+        await f(class_obj)
+
+    return wrapper
+
+
 def simple_response(f):
     """
     Decorator: runs function and uses llm to handle result formatting.

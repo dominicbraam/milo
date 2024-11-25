@@ -11,11 +11,12 @@ from milo.handler.action_decorators import (
 
 if TYPE_CHECKING:
     from discord import Message
-    from milo.handler.llm import LLMHandler
     from milo.handler.database import BaseModel
+    from milo.handler.discord import DiscordHandler
+    from milo.handler.llm import LLMHandler
 
 
-groups = ["server, personal"]  # used in other places like llm.py as an enum
+groups = ["server"]  # used in other places like llm.py as an enum
 group_data = {"server": {"table_model": SettingsServer}}
 
 
@@ -24,12 +25,19 @@ class Settings:
     Class to handle the settings module.
 
     Attributes:
+        dc_handler: DiscordHandler
         message: Message
         group: str
         llm_handler: LLMHandler
     """
 
-    def __init__(self, message: Message, args: dict, llm_handler: LLMHandler):
+    def __init__(
+        self,
+        dc_handler: DiscordHandler,
+        message: Message,
+        args: dict,
+        llm_handler: LLMHandler,
+    ):
         self.message = message
         self.group: str = args["group"]
         self.llm_handler = llm_handler
@@ -119,7 +127,7 @@ class Settings:
     @simple_response
     async def get_settings_as_dict(self) -> dict:
         """
-        Return server settings as a Python dictionary.
+        Return settings as a Python dictionary.
 
         Returns:
             dict
@@ -128,14 +136,14 @@ class Settings:
 
     @admin_privileges
     @confirm_decision_response(additional_process=None)
-    async def reset_server_settings(self) -> None:
-        """Reset server settings to default values."""
+    async def reset_settings(self) -> None:
+        """Reset settings to default values."""
 
         settings_default_copy = self.settings_default.__data__.copy()
         settings_default_copy.pop("id")
 
         table_model = self.group_data["table_model"]
-        item_id = self.group_data["id"]
+        item_id = self.group_data["item_id"]
 
         q = table_model.update(settings_default_copy).where(
             table_model.id == item_id
@@ -144,9 +152,9 @@ class Settings:
 
     @admin_privileges
     @confirm_decision_response(additional_process="form")
-    async def edit_server_settings(self, updated_settings: dict) -> None:
+    async def edit_settings(self, updated_settings: dict) -> None:
         """
-        Update server settings.
+        Update settings.
 
         Args:
             updated_settings: dict
