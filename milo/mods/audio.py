@@ -157,8 +157,8 @@ class DiscordAudio:
                 -reconnect_delay_max 5""",
             }
 
-            source = FFmpegPCMAudio(audio_url)
-            voice_client.play(source, **ffmpeg_options)
+            source = FFmpegPCMAudio(audio_url, **ffmpeg_options)
+            voice_client.play(source)
 
             return info_dict["title"]
 
