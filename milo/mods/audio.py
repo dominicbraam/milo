@@ -54,6 +54,7 @@ class DiscordAudio:
         """
         return {
             "verbose": True,
+            "geo-bypass": True,
             "format": "bestaudio/best",
             "quiet": True,
             "noplaylist": True,
