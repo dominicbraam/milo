@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import validators
 from asyncio import TimeoutError, sleep
 from discord import (
     ClientException,
@@ -62,6 +63,7 @@ class DiscordAudio:
             "format": "bestaudio/best",
             "quiet": True,
             "noplaylist": True,
+            "playlist_items": "1",
             "extractaudio": True,
             "audio-format": "mp3",
             "postprocessors": [
@@ -74,6 +76,8 @@ class DiscordAudio:
             "nocheckcertificate": True,
             "proxy": proxy,
             "cookiefile": "./data/system/youtube_cookies.txt",
+            "skip_download": True,
+            "ignore-errors": True,
         }
 
     async def get_voice_client(self) -> VoiceClient:
@@ -154,11 +158,19 @@ class DiscordAudio:
 
         try:
             with YoutubeDL(self.ydl_opts) as ydl:
-                title = self.args["query"]
-                info_searched = ydl.extract_info(
-                    f"ytsearch1:{title}", download=False
-                )
-                audio_url = info_searched["entries"][0]["url"]
+                query = self.args["query"]
+
+                yt_domains = ["youtube.com", "youtu.be"]
+                is_youtube = any(i in query for i in yt_domains)
+
+                if validators.url(query) and not is_youtube:
+                    info_searched = ydl.extract_info(query, download=False)
+                    audio_url = info_searched["url"]
+                else:
+                    info_searched = ydl.extract_info(
+                        f"ytsearch1:{query}", download=False
+                    )
+                    audio_url = info_searched["entries"][0]["url"]
 
         except Exception as e:
             return f"An error occured: {e}"
