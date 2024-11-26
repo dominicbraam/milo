@@ -229,19 +229,18 @@ class LLMHandler:
             {
                 "type": "function",
                 "function": {
-                    "name": "audio_DiscordAudio_play_from_url",
+                    "name": "audio_DiscordAudio_stream_audio",
                     "description": """Use this function if the user wants to
-                    play sound.""",
+                    play audio that'll be streamed.""",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "url": {
+                            "query": {
                                 "type": "string",
-                                "description": """A url from website
-                                (most likely YouTube)""",
+                                "description": """A song title or URL.""",
                             }
                         },
-                        "required": ["url"],
+                        "required": ["query"],
                         "additionalProperties": False,
                     },
                 },

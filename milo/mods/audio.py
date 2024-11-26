@@ -5,7 +5,6 @@ import tempfile
 from asyncio import TimeoutError, sleep
 from discord import (
     ClientException,
-    FFmpegOpusAudio,
     FFmpegPCMAudio,
     utils,
     VoiceState,
@@ -58,7 +57,7 @@ class DiscordAudio:
         proxy = os.getenv("PROXY")
 
         return {
-            "verbose": True,
+            "verbose": False,
             "geo-bypass": True,
             "format": "bestaudio/best",
             "quiet": True,
@@ -74,6 +73,7 @@ class DiscordAudio:
             ],
             "nocheckcertificate": True,
             "proxy": proxy,
+            "cookiefile": "./data/system/youtube_cookies.txt",
         }
 
     async def get_voice_client(self) -> VoiceClient:
@@ -109,18 +109,6 @@ class DiscordAudio:
         else:
             return voice_client
 
-    @no_response
-    async def say_text(self) -> None:
-        """Creates audio file from text as a temp file and play it."""
-        # exit if the text is longer than 500 characters
-        if len(self.args["text"]) > 200:
-            return
-
-        temp_file = tempfile.NamedTemporaryFile(suffix=".opus")
-
-        self.llm_handler.text_to_speech(temp_file.name, self.args["text"])
-        await self.play_from_file(temp_file.name)
-
     async def play_from_file(self, filepath: str) -> None:
         """
         Play audio file in Discord voice channel.
@@ -136,27 +124,46 @@ class DiscordAudio:
         if voice_client.is_playing():
             voice_client.stop()
 
-        source = FFmpegOpusAudio(source=filepath)
+        ffmpeg_options = {"options": "-vn"}
+
+        source = FFmpegPCMAudio(source=filepath, **ffmpeg_options)
         voice_client.play(source)
         while voice_client.is_playing():
             await sleep(1)
 
+    @no_response
+    async def say_text(self) -> None:
+        """Creates audio file from text as a temp file and play it."""
+        # exit if the text is longer than 500 characters
+        if len(self.args["text"]) > 200:
+            return
+
+        temp_file = tempfile.NamedTemporaryFile(suffix=".opus")
+
+        self.llm_handler.text_to_speech(temp_file.name, self.args["text"])
+        await self.play_from_file(temp_file.name)
+
     @simple_response
-    async def play_from_url(self) -> None:
-        """Play audio from yt-dlp stream in Discord voice channel."""
+    async def stream_audio(self) -> None:
+        """Stream audio from URL or search YouTube and stream result."""
 
         try:
             voice_client = await self.get_voice_client()
         except Exception as e:
             return f"{e}"
 
-        if voice_client.is_playing():
-            voice_client.stop()
-
         try:
             with YoutubeDL(self.ydl_opts) as ydl:
-                info_dict = ydl.extract_info(self.args["url"], download=False)
-                audio_url = info_dict["url"]
+                title = self.args["query"]
+                info_searched = ydl.extract_info(
+                    f"ytsearch1:{title}", download=False
+                )
+                audio_url = info_searched["entries"][0]["url"]
+
+        except Exception as e:
+            return f"An error occured: {e}"
+
+        else:
 
             ffmpeg_options = {
                 "options": "-vn",
@@ -165,12 +172,12 @@ class DiscordAudio:
             }
 
             source = FFmpegPCMAudio(audio_url, **ffmpeg_options)
+
+            if voice_client.is_playing():
+                voice_client.stop()
             voice_client.play(source)
 
-            return info_dict["title"]
-
-        except Exception as e:
-            return f"An error occured: {e}"
+            return info_searched["title"]
 
     @simple_response
     async def pause(self) -> Union[str, None]:

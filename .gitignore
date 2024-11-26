@@ -1,6 +1,9 @@
 # User data
 data/user/*
 
+# Personal cookies
+youtube_cookies.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
