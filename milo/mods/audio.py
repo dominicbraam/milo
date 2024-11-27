@@ -154,7 +154,7 @@ class DiscordAudio:
             text = self.llm_handler.summarize_text(
                 self.args["text"], voice_client_tts_max_chars
             )
-            text = f"Summarizing because that message was way too long: {text}"
+            text = f"I'm summarizing: {text}"
         else:
             text = self.args["text"]
 

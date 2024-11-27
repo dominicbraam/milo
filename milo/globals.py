@@ -10,4 +10,4 @@ parent_mod = "milo.mods"
 timeout_wait_for_reply = 10
 timeout_wait_for_button_interaction = 5
 voice_client_disconnect_time = 60
-voice_client_tts_max_chars = 250
+voice_client_tts_max_chars = 200
