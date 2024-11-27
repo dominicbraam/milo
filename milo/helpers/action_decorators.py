@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from milo.handler.discord import ConfirmView, FormModal
-from milo.handler.responders import Responder
+from milo.handler.responder import Responder
+from milo.helpers.discord.ui import ConfirmView, FormModal
 
 if TYPE_CHECKING:
     from openai.types.chat.chat_completion import Choice
@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 def no_response(f):
     """
-    Decorator: runs function without responding.
+    Decorator: runs function without responding unless there is an error.
 
     Args:
         f ()
@@ -18,8 +18,8 @@ def no_response(f):
 
     async def wrapper(class_obj: type, chat_choice: Choice) -> None:
         """
-        Inner function for simple_response decorator. Runs function and replies
-        to message.
+        Inner function for no_response decorator. Runs function and replies
+        to message if and only if there is an error.
 
         Args:
             class_obj: type
@@ -28,7 +28,11 @@ def no_response(f):
                 function using self.f()
             chat_choice: Choice
         """
-        await f(class_obj)
+        error = await f(class_obj)
+
+        if error:
+            responder = Responder(class_obj.llm_handler, chat_choice, error)
+            await responder.reply_to_message(class_obj.message)
 
     return wrapper
 

@@ -122,6 +122,26 @@ class LLMHandler:
 
         response.stream_to_file(filepath)
 
+    def summarize_text(self, text: str, char_limit: int) -> str:
+        """
+        Sumarize text and use a hard limit.
+
+        Returns:
+            Choice
+        """
+        completion = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"""Summarize into less than {char_limit}
+                    characters: {text}""",
+                }
+            ],
+        )
+
+        return completion.choices[0].message.content
+
     @property
     def function_descriptions(self) -> list[dict]:
         """

@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
-from milo.handler.action_decorators import simple_response
+from milo.helpers.action_decorators import simple_response
 
 if TYPE_CHECKING:
     from discord import Message

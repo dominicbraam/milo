@@ -1,24 +1,21 @@
 from __future__ import annotations
+import json
 from asyncio import TimeoutError
 from typing import TYPE_CHECKING
-from milo.handler.discord import is_reply_to_message
+from milo.helpers.discord.checks import is_reply_to_message
 from milo.globals import (
+    app_logger,
     bot_name,
     bot_name_len,
     parent_mod,
     timeout_wait_for_reply,
 )
 from milo.handler.llm import LLMHandler
-from milo.handler.log import Logger
-import json
 
 if TYPE_CHECKING:
     from discord import Message
     from openai.types.chat.chat_completion import Choice
     from milo.handler.discord import DiscordHandler
-
-
-app_logger = Logger("milo").get_logger()
 
 
 async def process_message(
@@ -54,8 +51,7 @@ async def process_message(
         user_message = message_content
 
     user_message = user_message.lstrip()
-    # TODO: logging twice
-    app_logger.info(f"[{channel}] {username}: '{user_message}'")
+    app_logger.debug(f"[{channel}] {username}: '{user_message}'")
 
     # create llm_handler if not already created (only created when the function
     # is called recursively). used to keep track of chat session with bot

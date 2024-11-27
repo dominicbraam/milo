@@ -1,19 +1,15 @@
 from __future__ import annotations
 import os
-from discord import (
-    ButtonStyle,
-    Client,
-    Intents,
-    SelectOption,
-    ui,
-)
+from asyncio import sleep
+from discord import Client, Intents
 from dotenv import load_dotenv
 from typing import TYPE_CHECKING
-from milo.globals import timeout_wait_for_button_interaction
+from milo.globals import app_logger, voice_client_disconnect_time
+from milo.handler.msg import process_message
 
 if TYPE_CHECKING:
-    from typing import Optional, Final
-    from discord import Interaction, Message
+    from discord import Guild, Member, Message, VoiceState
+    from typing import Final
 
 
 class DiscordHandler:
@@ -40,198 +36,53 @@ class DiscordHandler:
         load_dotenv()
         self.token: str = os.getenv("DISCORD_TOKEN")
 
+        @self.client.event
+        async def on_guild_join(guild: Guild) -> None:
+            app_logger.info(
+                f"Joined new server; name='{guild.name}' and id={guild.id}"
+            )
+
+        @self.client.event
+        async def on_ready() -> None:
+            app_logger.info(f"{self.client.user} is now running!")
+
+        @self.client.event
+        async def on_message(message: Message) -> None:
+
+            # ignore messages from itself
+            if message.author == self.client.user:
+                return
+
+            await process_message(self, message)
+
+        @self.client.event
+        async def on_voice_state_update(
+            member: Member, before: VoiceState, after: VoiceState
+        ) -> None:
+
+            # ignore if not itself
+            if not member == self.client.user:
+                return
+
+            elif before.channel is None:
+                voice_client = after.channel.guild.voice_client
+                time = 0
+                while True:
+                    # disconnect from voice client after
+                    # voice_client_disconnect_time runs out
+                    # if it is not being used
+                    await sleep(1)
+                    time = time + 1
+                    if (
+                        voice_client.is_playing()
+                        and not voice_client.is_paused()
+                    ):
+                        time = 0
+                    if time == voice_client_disconnect_time:
+                        await voice_client.disconnect()
+                    if not voice_client.is_connected():
+                        break
+
     def run(self) -> None:
         self.intents.message_content: bool = True
         self.client.run(token=self.token)
-
-
-class ConfirmView(ui.View):
-    """
-    Class to create confirm views in discord. It implements 2 buttons:
-    Continue and Cancel.
-
-    Attributes:
-        user_message_obj: Message
-        bot_message_obj: Optional[Message]
-            Message created as a reply to the user.
-        interaction: Interaction
-        exit_status: str
-            Different predefined functions from ui.View makes it so that the
-            view can exit in multiple ways. For example, it can exit when the
-            user clicks on Continue or it can simply timeout.
-            Options:
-              'premature', 'continued', 'cancelled', 'not_author', 'error'
-    """
-
-    def __init__(
-        self, *, timeout=timeout_wait_for_button_interaction, class_obj: type
-    ) -> None:
-        super().__init__(timeout=timeout)
-        self.user_message_obj: Message = class_obj.message
-        self.bot_message_obj: Optional[Message] = None
-        self.interaction: Interaction = None
-        self.exit_status: str = "error"
-
-    async def on_timeout(self):
-        """
-        Use builtin function from ui.View to disable buttons after timeout.
-        """
-        if self.bot_message_obj:
-            for item in self.children:
-                item.disabled = True
-            await self.bot_message_obj.edit(view=self)
-
-    async def interaction_check(self, interaction: Interaction) -> bool:
-        """
-        Use builtin function from ui.View to stop interaction if the
-        interaction user is not the author of the original message.
-
-        Args:
-            interaction: Interaction
-
-        Returns:
-            bool
-        """
-
-        if interaction.user != self.user_message_obj.author:
-            self.interaction = interaction
-            self.exit_status = "not_author"
-            self.stop()
-
-            return False
-        return True
-
-    @ui.button(label="Continue", style=ButtonStyle.green)
-    async def confirm(self, interaction: Interaction, button: ui.Button):
-        """
-        Stops interaction if this button is used and sets exit_status and
-        interaction properties for view object.
-
-        Args:
-            interaction: Interaction
-            button: ui.Button
-        """
-        self.interaction = interaction
-        self.exit_status = "continued"
-        self.stop()
-
-    @ui.button(label="Cancel", style=ButtonStyle.red)
-    async def cancel(self, interaction: Interaction, button: ui.Button):
-        """
-        Stops interaction if this button is used and sets exit_status and
-        interaction properties for view object.
-
-        Args:
-            interaction: Interaction
-            button: ui.Button
-        """
-        self.exit_status = "cancelled"
-        self.interaction = interaction
-        self.stop()
-
-
-class FormModal(ui.Modal):
-    """
-    Class to create modals in discord.
-
-    Attributes:
-        class_obj: type
-            Supports mutliple classes. For example, it can create forms for
-            changing settings or inputting data for a session.
-        results: dict
-            Hold results from modal after user submitted.
-        interaction: Interaction
-        exit_status: str
-            Different predefined functions from ui.Modal makes it so that the
-            view can exit in multiple ways. For example, it can exit when the
-            submits the form or it can simply timeout.
-            Options:
-              'submitted', 'error'
-    """
-
-    def __init__(self, *, title: str, class_obj: type) -> None:
-        super().__init__(title=title)
-        self.class_obj = class_obj
-        self.results = dict()
-        self.interaction: Interaction = None
-        self.exit_status: str = "error"
-
-        for field_key in class_obj.fields_extra_data:
-            # loop to populate form with fields. max = 5 fields
-            field_data = class_obj.fields_extra_data.get(field_key)
-            value = field_data.get("value")
-            options = field_data.get("options")
-            unit = field_data.get("unit")
-            if options:
-                self.add_item(FormDropdown(field_key, options))
-            else:
-                self.add_item(FormText(field_key, value, unit))
-
-    async def on_submit(self, interaction: Interaction):
-        """
-        Uses builtin function for ui.Modal to set properties:
-            - results: containing the results from the modal interaction
-            - interaction
-            - exit_status
-
-        Args:
-            interaction: Interaction
-        """
-        for child in self.children:
-            self.results[child.custom_id] = child.value
-
-        self.interaction = interaction
-        self.exit_status = "submitted"
-
-    async def on_error(self, interaction: Interaction, error: Exception):
-        """
-        Uses builtin function to set properties: interaction and exit_status
-        when the modal exits with an error.
-
-        Args:
-            interaction: Interaction
-            error: Exception
-        """
-        self.interaction = interaction
-        self.exit_status = "error"
-
-
-class FormDropdown(ui.Select):
-    def __init__(self, field, options):
-
-        select_options = list()
-        for o in options:
-            select_options.append(SelectOption(label=o))
-
-        super().__init__(
-            custom_id=field,
-            max_values=1,
-            min_values=1,
-            options=select_options,
-        )
-
-
-class FormText(ui.TextInput):
-    def __init__(self, field, value, unit):
-        label = f"{field} ({unit})"
-        super().__init__(
-            custom_id=field,
-            label=label,
-            default=value,
-        )
-
-
-def is_reply_to_message(message: Message, reply_message: Message) -> bool:
-    """
-    Check if the message is a reply to another message.
-
-    Args:
-        message: Message
-        reply_message: Message
-
-    Returns:
-        bool
-    """
-    if message.reference.message_id == reply_message.id:
-        return True
-    return False

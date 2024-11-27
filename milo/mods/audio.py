@@ -1,5 +1,4 @@
 from __future__ import annotations
-import logging
 import os
 import tempfile
 import validators
@@ -13,7 +12,8 @@ from discord import (
 from dotenv import load_dotenv
 from typing import TYPE_CHECKING, Union
 from yt_dlp import YoutubeDL
-from milo.handler.action_decorators import no_response, simple_response
+from milo.globals import voice_client_tts_max_chars
+from milo.helpers.action_decorators import no_response, simple_response
 
 if TYPE_CHECKING:
     from discord import Message, VoiceClient
@@ -80,38 +80,43 @@ class DiscordAudio:
             "ignore-errors": True,
         }
 
-    async def get_voice_client(self) -> VoiceClient:
+    async def get_voice_client(self) -> Union[VoiceClient, None]:
         """
         Get voice client if it exists or connect to voice channel and
-        create voice client with that.
+        create voice client. The voice client will always be associated
+        with the user.
 
         Raises:
             ClientException: Exception
+            TimeoutError: Exception
 
         Returns:
-            VoiceClient
+            Union[VoiceClient, None]
         """
+        if self.voice_state_user is None:
+            raise ClientException("User must be connected to voice channel.")
+
         voice_client = utils.get(
             self.dc_handler.client.voice_clients, guild=self.message.guild
         )
 
-        if voice_client is None:
-            if self.voice_state_user is None:
-                raise ClientException(
-                    "User must be connected to voice channel."
-                )
-
-            voice_channel = self.voice_state_user.channel
-
-            try:
-                voice_client = await voice_channel.connect()
+        if voice_client is not None:
+            # return voice_client if exists already. if user is in a different
+            # voice channel, disconnect and don't exit function
+            if voice_client.channel == self.voice_state_user.channel:
                 return voice_client
-            except TimeoutError as timeout:
-                logging.error(timeout)
-            except ClientException as already_connected:
-                logging.info(already_connected)
-        else:
+            else:
+                await voice_client.disconnect()
+
+        voice_channel = self.voice_state_user.channel
+
+        try:
+            voice_client = await voice_channel.connect()
             return voice_client
+        except TimeoutError as e:
+            raise TimeoutError(e)
+        except ClientException as e:
+            raise ClientException(e)
 
     async def play_from_file(self, filepath: str) -> None:
         """
@@ -123,7 +128,7 @@ class DiscordAudio:
         try:
             voice_client = await self.get_voice_client()
         except Exception as e:
-            return f"{e}"
+            raise Exception(e)
 
         if voice_client.is_playing():
             voice_client.stop()
@@ -136,20 +141,39 @@ class DiscordAudio:
             await sleep(1)
 
     @no_response
-    async def say_text(self) -> None:
-        """Creates audio file from text as a temp file and play it."""
-        # exit if the text is longer than 500 characters
-        if len(self.args["text"]) > 200:
-            return
+    async def say_text(self) -> Union[str, None]:
+        """
+        Creates audio file from text as a temp file and play it.
+
+        Returns:
+            Union[str, None]
+        """
+
+        # summarize if text is too long
+        if len(self.args["text"]) > voice_client_tts_max_chars:
+            text = self.llm_handler.summarize_text(
+                self.args["text"], voice_client_tts_max_chars
+            )
+            text = f"Summarizing because that message was way too long: {text}"
+        else:
+            text = self.args["text"]
 
         temp_file = tempfile.NamedTemporaryFile(suffix=".opus")
+        self.llm_handler.text_to_speech(temp_file.name, text)
 
-        self.llm_handler.text_to_speech(temp_file.name, self.args["text"])
-        await self.play_from_file(temp_file.name)
+        try:
+            await self.play_from_file(temp_file.name)
+        except Exception as e:
+            return f"{e}"
 
     @simple_response
-    async def stream_audio(self) -> None:
-        """Stream audio from URL or search YouTube and stream result."""
+    async def stream_audio(self) -> str:
+        """
+        Stream audio from URL or search YouTube and stream result.
+
+        Returns:
+            str
+        """
 
         try:
             voice_client = await self.get_voice_client()
@@ -157,20 +181,31 @@ class DiscordAudio:
             return f"{e}"
 
         try:
-            with YoutubeDL(self.ydl_opts) as ydl:
-                query = self.args["query"]
+            query = self.args["query"]
 
-                yt_domains = ["youtube.com", "youtu.be"]
-                is_youtube = any(i in query for i in yt_domains)
+            yt_domains = ["youtube.com", "youtu.be"]
+            is_youtube = any(i in query for i in yt_domains)
 
-                if validators.url(query) and not is_youtube:
+            if validators.url(query) and not is_youtube:
+                # play directly from URL if the source is not YouTube
+                with YoutubeDL(self.ydl_opts) as ydl:
                     info_searched = ydl.extract_info(query, download=False)
                     audio_url = info_searched["url"]
-                else:
+                    title = info_searched["title"]
+            else:
+                # don't use proxy if using YouTube
+                ydl_opts = self.ydl_opts
+                ydl_opts.pop("proxy")
+
+                if not validators.url(query):
+                    query = f"{query} audio"  # search specifically for audio
+
+                with YoutubeDL(ydl_opts) as ydl:
                     info_searched = ydl.extract_info(
                         f"ytsearch1:{query}", download=False
                     )
                     audio_url = info_searched["entries"][0]["url"]
+                    title = info_searched["entries"][0]["title"]
 
         except Exception as e:
             return f"An error occured: {e}"
@@ -189,7 +224,7 @@ class DiscordAudio:
                 voice_client.stop()
             voice_client.play(source)
 
-            return info_searched["title"]
+            return title
 
     @simple_response
     async def pause(self) -> Union[str, None]:

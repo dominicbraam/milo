@@ -3,7 +3,7 @@ from playhouse.shortcuts import model_to_dict
 from typing import TYPE_CHECKING
 import toml
 from milo.handler.database import SettingsServer
-from milo.handler.action_decorators import (
+from milo.helpers.action_decorators import (
     admin_privileges,
     confirm_decision_response,
     simple_response,
