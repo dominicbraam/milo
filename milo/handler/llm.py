@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 from typing import TYPE_CHECKING
 import json
 from milo.mods.settings import groups as settings_groups
@@ -16,7 +16,7 @@ class LLMHandler:
     Class to handle communication with the OpenAI API.
 
     Attributes:
-        client: OpenAI
+        client: AsyncOpenAI
         model: str
         chat_record: list[dict]
             The entire chat with llm. Fill chat if chat memory is to be used.
@@ -24,7 +24,9 @@ class LLMHandler:
 
     def __init__(self):
         load_dotenv()
-        self.client: OpenAI = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self.client: AsyncOpenAI = AsyncOpenAI(
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
         self.model: str = "gpt-4o-mini"
         self.chat_record: list[dict] = [
             {
@@ -58,7 +60,7 @@ class LLMHandler:
             }
         )
 
-    def get_function_choice(self) -> Choice:
+    async def get_function_choice(self) -> Choice:
         """
         Evaluate self.user_message using OpenAI function calling to select
         which function to run.
@@ -66,7 +68,7 @@ class LLMHandler:
         Returns:
             Choice
         """
-        completion = self.client.chat.completions.create(
+        completion = await self.client.chat.completions.create(
             model=self.model,
             messages=self.chat_record,
             tools=self.function_descriptions,
@@ -74,7 +76,7 @@ class LLMHandler:
 
         return completion.choices[0]
 
-    def get_response(
+    async def get_response(
         self, chat_choice: Choice, results: Union[str, dict]
     ) -> Choice:
         """
@@ -99,14 +101,14 @@ class LLMHandler:
                 }
             )
 
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=self.model,
             messages=self.chat_record,
         )
 
         return response.choices[0]
 
-    def text_to_speech(self, filepath: str, text: str) -> None:
+    async def text_to_speech(self, filepath: str, text: str) -> None:
         """
         Text to speech.
 
@@ -114,7 +116,7 @@ class LLMHandler:
             filepath (): str
             text (): str
         """
-        response = self.client.audio.speech.create(
+        response = await self.client.audio.speech.create(
             model="tts-1",
             voice="onyx",
             input=text,
@@ -122,14 +124,14 @@ class LLMHandler:
 
         response.stream_to_file(filepath)
 
-    def summarize_text(self, text: str, char_limit: int) -> str:
+    async def summarize_text(self, text: str, char_limit: int) -> str:
         """
         Sumarize text and use a hard limit.
 
         Returns:
             Choice
         """
-        completion = self.client.chat.completions.create(
+        completion = await self.client.chat.completions.create(
             model=self.model,
             messages=[
                 {

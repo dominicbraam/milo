@@ -58,7 +58,7 @@ async def process_message(
     if not llm_handler:
         llm_handler = LLMHandler()
     llm_handler.add_message_to_record("user", user_message)
-    chat_choice = llm_handler.get_function_choice()
+    chat_choice = await llm_handler.get_function_choice()
     finish_reason = chat_choice.finish_reason
 
     if finish_reason == "stop":

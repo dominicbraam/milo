@@ -151,7 +151,7 @@ class DiscordAudio:
 
         # summarize if text is too long
         if len(self.args["text"]) > voice_client_tts_max_chars:
-            text = self.llm_handler.summarize_text(
+            text = await self.llm_handler.summarize_text(
                 self.args["text"], voice_client_tts_max_chars
             )
             text = f"I'm summarizing: {text}"
@@ -159,7 +159,7 @@ class DiscordAudio:
             text = self.args["text"]
 
         temp_file = tempfile.NamedTemporaryFile(suffix=".opus")
-        self.llm_handler.text_to_speech(temp_file.name, text)
+        await self.llm_handler.text_to_speech(temp_file.name, text)
 
         try:
             await self.play_from_file(temp_file.name)

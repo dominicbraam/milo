@@ -40,7 +40,7 @@ class Responder:
         Returns:
             str
         """
-        response = self.llm_handler.get_response(
+        response = await self.llm_handler.get_response(
             self.chat_choice, self.results
         )
         return response.message.content
