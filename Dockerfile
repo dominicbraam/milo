@@ -1,7 +1,9 @@
 FROM python:3.11.2-slim
 
 RUN apt-get update && \
-    apt-get install -y libffi-dev libnacl-dev python3-dev && \
+    apt-get install -y --no-install-recommends \
+    ffmpeg \
+    libffi-dev libnacl-dev python3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
